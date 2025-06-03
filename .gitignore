@@ -47,6 +47,7 @@ app.*.map.json
 # Environment files
 .env
 ios/Flutter/keys.xcconfig
+ios/Flutter/keys.xcconfig.template
 
 # Firebase and Google configuration files
 android/app/google-services.json
