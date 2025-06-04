@@ -9,11 +9,72 @@ import '../widgets/event_edit_dialog.dart';
 import '../widgets/event_invitations_screen.dart';
 import '../main.dart'; // Import for pendingInvitationsProvider
 import '../widgets/add_event_dialog.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const Color primaryAppColor = Colors.deepPurple;
 const Color accentAppColor = Colors.pinkAccent;
 const Color surfaceAppColor = Colors.white;
 const Color cardAppColor = Color(0xFFF8F8F8);
+
+enum EventCategory {
+  personal,
+  work,
+  social,
+  family,
+  health,
+  other;
+
+  String get displayName {
+    switch (this) {
+      case EventCategory.personal:
+        return 'Personal';
+      case EventCategory.work:
+        return 'Work';
+      case EventCategory.social:
+        return 'Social';
+      case EventCategory.family:
+        return 'Family';
+      case EventCategory.health:
+        return 'Health';
+      case EventCategory.other:
+        return 'Other';
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case EventCategory.personal:
+        return Colors.blue;
+      case EventCategory.work:
+        return Colors.orange;
+      case EventCategory.social:
+        return Colors.purple;
+      case EventCategory.family:
+        return Colors.green;
+      case EventCategory.health:
+        return Colors.red;
+      case EventCategory.other:
+        return Colors.grey;
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case EventCategory.personal:
+        return Icons.person;
+      case EventCategory.work:
+        return Icons.work;
+      case EventCategory.social:
+        return Icons.people;
+      case EventCategory.family:
+        return Icons.family_restroom;
+      case EventCategory.health:
+        return Icons.favorite;
+      case EventCategory.other:
+        return Icons.category;
+    }
+  }
+}
 
 class CalendarScreen extends ConsumerStatefulWidget {
   final DateTime? initialDate;
@@ -124,6 +185,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         endDate: endDate,
         creatorId: data['creatorId'] ?? user.uid,
         creatorDisplayName: data['creatorDisplayName'] ?? user.displayName ?? user.email ?? 'A user',
+        category: EventCategory.values.firstWhere(
+          (e) => e.name == (data['category'] as String? ?? 'other'),
+          orElse: () => EventCategory.other,
+        ),
       );
       addEventToMap(event, localEvents);
     }
@@ -177,6 +242,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             endDate: endDate,
             creatorId: eventData['creatorId'] ?? creatorId,
             creatorDisplayName: inviteData['creatorDisplayName'] ?? eventData['creatorDisplayName'] ?? 'Unknown',
+            category: EventCategory.values.firstWhere(
+              (e) => e.name == (eventData['category'] as String? ?? 'other'),
+              orElse: () => EventCategory.other,
+            ),
           );
           addEventToMap(event, localEvents);
         }
@@ -257,7 +326,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         initialIsPrivate: existingEvent?.isPrivate ?? false,
         friendsList: friendsList,
         initialSelectedFriendUids: existingEvent?.sharedWith ?? [],
-        onSave: (title, description, locationMap, date, endDate, isPrivate, selectedFriendUids) async {
+        onSave: (title, description, locationMap, date, endDate, isPrivate, selectedFriendUids, category) async {
           final currentUser = FirebaseAuth.instance.currentUser;
           if (currentUser == null) return;
           final eventData = {
@@ -271,6 +340,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             'lastModified': FieldValue.serverTimestamp(),
             'creatorId': currentUser.uid,
             'creatorDisplayName': currentUser.displayName ?? currentUser.email ?? 'A user',
+            'category': category.name,
           };
           String? eventId = existingEvent?.id;
           try {
@@ -350,7 +420,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.background,
       appBar: AppBar(
-        title: Text('My Calendar', style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
+        title: null,
         backgroundColor: surfaceAppColor,
         elevation: 1,
         actions: [
@@ -530,11 +600,47 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           color: cardAppColor,
                           child: ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            leading: Icon(
-                              event.isPrivate ? Icons.lock_outline : Icons.event_available_outlined,
-                              color: event.isPrivate ? Colors.orangeAccent : primaryAppColor,
+                            leading: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  event.category.icon,
+                                  color: event.category.color,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  event.isPrivate ? Icons.lock_outline : Icons.event_available_outlined,
+                                  color: event.isPrivate ? Colors.orangeAccent : primaryAppColor,
+                                ),
+                              ],
                             ),
-                            title: Text(event.title, style: GoogleFonts.lato(fontWeight: FontWeight.w600)),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    event.title,
+                                    style: GoogleFonts.lato(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: event.category.color.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: event.category.color.withOpacity(0.3)),
+                                  ),
+                                  child: Text(
+                                    event.category.displayName,
+                                    style: GoogleFonts.lato(
+                                      fontSize: 12,
+                                      color: event.category.color,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                             subtitle: event.description.isNotEmpty
                                 ? Text(event.description, style: GoogleFonts.lato(), maxLines: 2, overflow: TextOverflow.ellipsis)
                                 : null,
@@ -592,6 +698,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
+                                      Row(
+                                        children: [
+                                          Icon(event.category.icon, color: event.category.color),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            event.category.displayName,
+                                            style: GoogleFonts.lato(
+                                              color: event.category.color,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
                                       Text("Date: ${DateFormat('MMM dd, yyyy').format(event.date)}", style: GoogleFonts.lato()),
                                       const SizedBox(height: 8),
                                       Text("Description:", style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
@@ -606,7 +726,38 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                         const SizedBox(height: 8),
                                         // You could fetch and display friend names here if needed
                                         // For now, just showing the count.
-                                      ]
+                                      ],
+                                      if (event.location != null) ...[
+                                        const SizedBox(height: 8),
+                                        Text("Location:", style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                event.location!['address'] ?? 'No address',
+                                                style: GoogleFonts.lato(),
+                                              ),
+                                            ),
+                                            if (event.lat != null && event.lng != null)
+                                              IconButton(
+                                                icon: const Icon(Icons.navigation, color: Colors.blue),
+                                                onPressed: () async {
+                                                  final url = 'https://www.google.com/maps/dir/?api=1&destination=${event.lat},${event.lng}';
+                                                  if (await canLaunchUrl(Uri.parse(url))) {
+                                                    await launchUrl(Uri.parse(url));
+                                                  } else {
+                                                    if (mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        const SnackBar(content: Text('Could not launch navigation')),
+                                                      );
+                                                    }
+                                                  }
+                                                },
+                                                tooltip: 'Navigate to this location',
+                                              ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -732,6 +883,7 @@ class Event {
   final DateTime? endDate;
   final String creatorId;
   final String? creatorDisplayName;
+  final EventCategory category;
 
   Event({
     required this.id,
@@ -744,6 +896,7 @@ class Event {
     this.endDate,
     required this.creatorId,
     this.creatorDisplayName,
+    this.category = EventCategory.other,
   });
 
   String? get address {
@@ -767,5 +920,40 @@ class Event {
     if (lngVal is double) return lngVal;
     if (lngVal is int) return lngVal.toDouble();
     return null;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'location': location,
+      'isPrivate': isPrivate,
+      'sharedWith': sharedWith,
+      'date': date,
+      'endDate': endDate,
+      'creatorId': creatorId,
+      'creatorDisplayName': creatorDisplayName,
+      'category': category.name,
+    };
+  }
+
+  factory Event.fromMap(Map<String, dynamic> map) {
+    return Event(
+      id: map['id'] as String,
+      title: map['title'] as String,
+      description: map['description'] as String,
+      location: map['location'] as Map<String, dynamic>?,
+      isPrivate: map['isPrivate'] as bool,
+      sharedWith: List<String>.from(map['sharedWith'] as List),
+      date: (map['date'] as Timestamp).toDate(),
+      endDate: map['endDate'] != null ? (map['endDate'] as Timestamp).toDate() : null,
+      creatorId: map['creatorId'] as String,
+      creatorDisplayName: map['creatorDisplayName'] as String?,
+      category: EventCategory.values.firstWhere(
+        (e) => e.name == (map['category'] as String? ?? 'other'),
+        orElse: () => EventCategory.other,
+      ),
+    );
   }
 }

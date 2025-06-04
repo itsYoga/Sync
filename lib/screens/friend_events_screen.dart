@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../screens/calendar_screen.dart';  // Add this import for EventCategory
 
 const Color primaryAppColor = Colors.deepPurple;
 const Color accentAppColor = Colors.pinkAccent;
@@ -52,6 +54,7 @@ class _FriendEventsScreenState extends State<FriendEventsScreen> {
           'isPrivate': data['isPrivate'] ?? false,
           'sharedWith': List<String>.from(data['sharedWith'] ?? []),
           'creatorId': data['creatorId'] ?? widget.friendUid,
+          'category': data['category'] as String?,
         };
       }).toList();
 
@@ -220,17 +223,49 @@ class _FriendEventsScreenState extends State<FriendEventsScreen> {
                           color: cardAppColor,
                           child: ListTile(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            leading: Icon(
-                              event['isPrivate'] ? Icons.lock_outline : Icons.event_available_outlined,
-                              color: event['isPrivate'] ? Colors.orangeAccent : primaryAppColor,
+                            leading: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getCategoryIcon(event['category']),
+                                  color: _getCategoryColor(event['category']),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  event['isPrivate'] ? Icons.lock_outline : Icons.event_available_outlined,
+                                  color: event['isPrivate'] ? Colors.orangeAccent : primaryAppColor,
+                                ),
+                              ],
                             ),
-                            title: Text(event['title'], 
-                              style: GoogleFonts.lato(fontWeight: FontWeight.w600)),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    event['title'],
+                                    style: GoogleFonts.lato(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: _getCategoryColor(event['category']).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: _getCategoryColor(event['category']).withOpacity(0.3)),
+                                  ),
+                                  child: Text(
+                                    _getCategoryName(event['category']),
+                                    style: GoogleFonts.lato(
+                                      fontSize: 12,
+                                      color: _getCategoryColor(event['category']),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                             subtitle: event['description'].isNotEmpty
-                                ? Text(event['description'], 
-                                    style: GoogleFonts.lato(), 
-                                    maxLines: 2, 
-                                    overflow: TextOverflow.ellipsis)
+                                ? Text(event['description'], style: GoogleFonts.lato(), maxLines: 2, overflow: TextOverflow.ellipsis)
                                 : null,
                             onTap: () {
                               showDialog(
@@ -265,11 +300,36 @@ class _FriendEventsScreenState extends State<FriendEventsScreen> {
                                           Text("Location:", 
                                             style: GoogleFonts.lato(fontWeight: FontWeight.bold)
                                           ),
-                                          Text(
-                                            event['location'] is Map 
-                                              ? event['location']['address'] ?? 'No address'
-                                              : event['location'].toString(),
-                                            style: GoogleFonts.lato()
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  event['location'] is Map 
+                                                    ? event['location']['address'] ?? 'No address'
+                                                    : event['location'].toString(),
+                                                  style: GoogleFonts.lato()
+                                                ),
+                                              ),
+                                              if (event['location'] is Map && 
+                                                  event['location']['lat'] != null && 
+                                                  event['location']['lng'] != null)
+                                                IconButton(
+                                                  icon: const Icon(Icons.navigation, color: Colors.blue),
+                                                  onPressed: () async {
+                                                    final url = 'https://www.google.com/maps/dir/?api=1&destination=${event['location']['lat']},${event['location']['lng']}';
+                                                    if (await canLaunchUrl(Uri.parse(url))) {
+                                                      await launchUrl(Uri.parse(url));
+                                                    } else {
+                                                      if (mounted) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          const SnackBar(content: Text('Could not launch navigation')),
+                                                        );
+                                                      }
+                                                    }
+                                                  },
+                                                  tooltip: 'Navigate to this location',
+                                                ),
+                                            ],
                                           ),
                                         ],
                                       ],
@@ -292,5 +352,24 @@ class _FriendEventsScreenState extends State<FriendEventsScreen> {
         ],
       ),
     );
+  }
+
+  EventCategory _getCategoryFromString(String? categoryName) {
+    return EventCategory.values.firstWhere(
+      (e) => e.name == (categoryName ?? 'other'),
+      orElse: () => EventCategory.other,
+    );
+  }
+
+  Color _getCategoryColor(String? categoryName) {
+    return _getCategoryFromString(categoryName).color;
+  }
+
+  IconData _getCategoryIcon(String? categoryName) {
+    return _getCategoryFromString(categoryName).icon;
+  }
+
+  String _getCategoryName(String? categoryName) {
+    return _getCategoryFromString(categoryName).displayName;
   }
 } 

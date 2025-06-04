@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/map_screen.dart';
 import '../models/selected_place.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
+import '../screens/calendar_screen.dart';
 
 class EventEditDialog extends StatefulWidget {
   final String? initialTitle;
@@ -18,6 +19,7 @@ class EventEditDialog extends StatefulWidget {
   final bool initialIsPrivate;
   final List<Map<String, dynamic>> friendsList;
   final List<String> initialSelectedFriendUids;
+  final EventCategory? initialCategory;
   final void Function(
     String title,
     String description,
@@ -26,6 +28,7 @@ class EventEditDialog extends StatefulWidget {
     DateTime? endDate,
     bool isPrivate,
     List<String> selectedFriendUids,
+    EventCategory category,
   ) onSave;
 
   const EventEditDialog({
@@ -38,6 +41,7 @@ class EventEditDialog extends StatefulWidget {
     required this.initialIsPrivate,
     required this.friendsList,
     required this.initialSelectedFriendUids,
+    this.initialCategory,
     required this.onSave,
   });
 
@@ -55,6 +59,7 @@ class _EventEditDialogState extends State<EventEditDialog> {
   List<String> _selectedFriendUids = [];
   SelectedPlace? _selectedPlaceDetails;
   bool _isLoading = false;
+  EventCategory _selectedCategory = EventCategory.other;
 
   @override
   void initState() {
@@ -66,6 +71,7 @@ class _EventEditDialogState extends State<EventEditDialog> {
     _selectedEndDate = widget.initialEndDate;
     _isPrivate = widget.initialIsPrivate;
     _selectedFriendUids = List<String>.from(widget.initialSelectedFriendUids);
+    _selectedCategory = widget.initialCategory ?? EventCategory.other;
   }
 
   @override
@@ -393,6 +399,7 @@ class _EventEditDialogState extends State<EventEditDialog> {
                 _selectedEndDate,
                 _isPrivate,
                 _selectedFriendUids,
+                _selectedCategory,
               );
 
               if (mounted) {

@@ -36,27 +36,30 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingFriends = true;
+      _isLoadingRequests = true;
+    });
     await _fetchFriends();
     await _fetchFriendRequests();
   }
 
   void _filterFriends() {
     final searchTerm = _searchController.text.toLowerCase();
-    if (searchTerm.isEmpty) {
-      setState(() {
+    if (!mounted) return;
+    setState(() {
+      _searchTerm = searchTerm;
+      if (searchTerm.isEmpty) {
         _filteredFriends = _friends;
-        _searchTerm = '';
-      });
-    } else {
-      setState(() {
-        _searchTerm = searchTerm;
+      } else {
         _filteredFriends = _friends.where((friend) {
           final displayName = friend['displayName']?.toString().toLowerCase() ?? '';
           final email = friend['email']?.toString().toLowerCase() ?? '';
           return displayName.contains(searchTerm) || email.contains(searchTerm);
         }).toList();
-      });
-    }
+      }
+    });
   }
 
   Future<void> _fetchFriends() async {
@@ -477,27 +480,27 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   Widget _buildSectionHeader(BuildContext context, String title, int count) {
     return Padding(
-      padding: const EdgeInsets.only(top: 24.0, bottom: 8.0),
+      padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 16.0, right: 16.0),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             title,
             style: GoogleFonts.inter(
               fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          const SizedBox(width: 8),
           if (count > 0)
             Chip(
               label: Text(count.toString()),
-              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               labelStyle: TextStyle(
-                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
                 fontWeight: FontWeight.bold,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               visualDensity: VisualDensity.compact,
             )
         ],
@@ -513,41 +516,44 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (photoURL != null && photoURL.isNotEmpty) {
       return CircleAvatar(
         backgroundImage: NetworkImage(photoURL),
-        radius: 20,
+        radius: 22,
+        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
       );
     }
     return CircleAvatar(
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-      radius: 20,
+      radius: 22,
       child: Text(
         initial,
         style: TextStyle(
           color: Theme.of(context).colorScheme.onPrimaryContainer,
           fontWeight: FontWeight.bold,
+          fontSize: 18,
         ),
       ),
     );
   }
 
   Widget _buildEmptyState(String message, IconData icon) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 24.0),
+      child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
-              size: 60,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              size: 72,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
               message,
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 fontSize: 16,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                height: 1.5,
               ),
             ),
           ],
@@ -722,106 +728,154 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
+  void _showFriendOptions(Map<String, dynamic> friend) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext context) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline_rounded),
+                title: const Text('Start Chat'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _startChat(
+                    friend['uid'],
+                    friend['displayName'] ?? friend['email'] ?? 'Friend',
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.event_note_outlined),
+                title: const Text('View Public Events'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _viewFriendEvents(
+                    friend['uid'],
+                    friend['displayName'] ?? friend['email'] ?? 'Friend',
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.person_remove_alt_1_rounded, color: Theme.of(context).colorScheme.error),
+                title: Text('Remove Friend', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _removeFriend(friend['uid']);
+                },
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bool showLoading = _isLoadingFriends || _isLoadingRequests;
+    final bool isInitiallyLoading = (_isLoadingFriends && _friends.isEmpty) || (_isLoadingRequests && _friendRequests.isEmpty);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Manage Friends',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-        ),
-      ),
       body: RefreshIndicator(
         onRefresh: _loadData,
-        child: showLoading && (_friends.isEmpty && _friendRequests.isEmpty)
+        color: theme.colorScheme.primary,
+        child: isInitiallyLoading
             ? const Center(child: CircularProgressIndicator())
             : CustomScrollView(
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
                     sliver: SliverToBoxAdapter(
                       child: TextFormField(
                         controller: _searchController,
                         decoration: InputDecoration(
                           hintText: 'Search friends or add by email...',
                           prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _searchTerm.isNotEmpty
+                          suffixIcon: _searchTerm.isNotEmpty && _searchTerm.contains('@')
                               ? IconButton(
-                                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                                  tooltip: 'Add "${_searchTerm}" as friend',
-                                  onPressed: () {
-                                    if (_searchTerm.contains('@')) {
-                                      _sendFriendRequest(_searchTerm.trim());
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Please enter a valid email to add a friend.'),
-                                        ),
-                                      );
-                                    }
-                                  },
+                                  icon: Icon(Icons.person_add_alt_1_rounded, color: theme.colorScheme.primary),
+                                  tooltip: 'Add "$_searchTerm" as friend',
+                                  onPressed: () => _sendFriendRequest(_searchTerm.trim()),
                                 )
-                              : null,
+                              : _searchTerm.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      _searchController.clear();
+                                    },
+                                  )
+                                : null,
+                          filled: true,
+                          fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
                   ),
+                  
+                  // Friend Requests Section
                   SliverToBoxAdapter(
                     child: _buildSectionHeader(context, 'Friend Requests', _friendRequests.length),
                   ),
                   _isLoadingRequests && _friendRequests.isEmpty
-                      ? const SliverToBoxAdapter(
-                          child: Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
+                      ? SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 3, color: theme.colorScheme.primary)),
                           ),
                         )
                       : _friendRequests.isEmpty
-                          ? SliverToBoxAdapter(
-                              child: _buildEmptyState(
-                                'No pending friend requests.',
-                                Icons.person_add_disabled_outlined,
-                              ),
-                            )
+                          ? SliverToBoxAdapter(child: _buildEmptyState('No pending friend requests.', Icons.person_add_disabled_rounded))
                           : SliverList(
                               delegate: SliverChildBuilderDelegate(
                                 (context, index) {
                                   final req = _friendRequests[index];
                                   return Card(
-                                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                                    elevation: 1.5,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                     child: ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                       leading: _buildAvatar(req),
                                       title: Text(
                                         req['displayName'] ?? req['email'] ?? 'Unknown User',
-                                        style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
                                       ),
                                       subtitle: Text(
                                         req['email'] ?? 'No email',
-                                        style: GoogleFonts.inter(fontSize: 12),
+                                        style: GoogleFonts.inter(fontSize: 13, color: theme.colorScheme.outline),
                                       ),
                                       trailing: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           IconButton(
-                                            icon: Icon(
-                                              Icons.check_circle_outline,
-                                              color: theme.colorScheme.primary,
-                                            ),
+                                            icon: Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary),
                                             tooltip: 'Accept',
                                             onPressed: () => _acceptFriendRequest(req['uid']),
+                                            splashRadius: 24,
                                           ),
                                           IconButton(
-                                            icon: Icon(
-                                              Icons.cancel_outlined,
-                                              color: theme.colorScheme.error,
-                                            ),
+                                            icon: Icon(Icons.cancel_rounded, color: theme.colorScheme.error),
                                             tooltip: 'Reject',
                                             onPressed: () => _rejectFriendRequest(req['uid']),
+                                            splashRadius: 24,
                                           ),
                                         ],
                                       ),
@@ -831,25 +885,25 @@ class _FriendsScreenState extends State<FriendsScreen> {
                                 childCount: _friendRequests.length,
                               ),
                             ),
+
+                  // My Friends Section
                   SliverToBoxAdapter(
                     child: _buildSectionHeader(context, 'My Friends', _filteredFriends.length),
                   ),
-                  _isLoadingFriends && _filteredFriends.isEmpty
-                      ? const SliverToBoxAdapter(
-                          child: Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
+                  _isLoadingFriends && _filteredFriends.isEmpty && _friends.isNotEmpty
+                      ? SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 3, color: theme.colorScheme.primary)),
                           ),
                         )
                       : _filteredFriends.isEmpty
                           ? SliverToBoxAdapter(
                               child: _buildEmptyState(
                                 _friends.isEmpty
-                                    ? 'Add friends by searching their email above.'
-                                    : 'No friends match your search.',
-                                Icons.group_outlined,
+                                    ? 'Your friend list is empty. Add friends by searching their email above.'
+                                    : 'No friends match your search for "$_searchTerm".',
+                                Icons.sentiment_dissatisfied_rounded,
                               ),
                             )
                           : SliverList(
@@ -857,63 +911,53 @@ class _FriendsScreenState extends State<FriendsScreen> {
                                 (context, index) {
                                   final friend = _filteredFriends[index];
                                   return Card(
-                                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                                    elevation: 1.5,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                     child: ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                       leading: _buildAvatar(friend),
                                       title: Text(
                                         friend['displayName'] ?? friend['email'] ?? 'Unknown User',
-                                        style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
                                       ),
                                       subtitle: Text(
                                         friend['email'] ?? 'No email',
-                                        style: GoogleFonts.inter(fontSize: 12),
+                                        style: GoogleFonts.inter(fontSize: 13, color: theme.colorScheme.outline),
                                       ),
                                       trailing: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           IconButton(
-                                            icon: Icon(
-                                              Icons.chat_outlined,
-                                              color: theme.colorScheme.primary,
-                                            ),
+                                            icon: Icon(Icons.chat_bubble_rounded, color: theme.colorScheme.primary),
                                             onPressed: () => _startChat(
                                               friend['uid'],
                                               friend['displayName'] ?? friend['email'] ?? 'Friend',
                                             ),
                                             tooltip: 'Start chat',
+                                            splashRadius: 24,
                                           ),
                                           IconButton(
-                                            icon: Icon(
-                                              Icons.calendar_month_outlined,
-                                              color: theme.colorScheme.secondary,
-                                            ),
+                                            icon: Icon(Icons.event_note_rounded, color: theme.colorScheme.secondary),
                                             onPressed: () => _viewFriendEvents(
                                               friend['uid'],
                                               friend['displayName'] ?? friend['email'] ?? 'Friend',
                                             ),
                                             tooltip: 'View public events',
-                                          ),
-                                          IconButton(
-                                            icon: Icon(
-                                              Icons.person_remove_outlined,
-                                              color: theme.colorScheme.error.withOpacity(0.7),
-                                            ),
-                                            onPressed: () => _removeFriend(friend['uid']),
-                                            tooltip: 'Remove friend',
+                                            splashRadius: 24,
                                           ),
                                         ],
                                       ),
-                                      onTap: () => _viewFriendEvents(
-                                        friend['uid'],
-                                        friend['displayName'] ?? friend['email'] ?? 'Friend',
-                                      ),
+                                      onLongPress: () => _showFriendOptions(friend),
+                                      onTap: () => _showFriendOptions(friend),
                                     ),
                                   );
                                 },
                                 childCount: _filteredFriends.length,
                               ),
                             ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 30)),
                 ],
               ),
       ),

@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/map_screen.dart';
 import '../models/selected_place.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
+import '../screens/calendar_screen.dart';
 
 class AddEventDialog extends StatefulWidget {
   final String? initialTitle;
@@ -19,6 +20,7 @@ class AddEventDialog extends StatefulWidget {
   final List<Map<String, dynamic>> friendsList;
   final List<String> initialSelectedFriendUids;
   final SelectedPlace? initialSelectedPlace;
+  final EventCategory? initialCategory;
 
   const AddEventDialog({
     super.key,
@@ -31,6 +33,7 @@ class AddEventDialog extends StatefulWidget {
     this.friendsList = const [],
     this.initialSelectedFriendUids = const [],
     this.initialSelectedPlace,
+    this.initialCategory,
   });
 
   @override
@@ -47,6 +50,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
   List<String> _selectedFriendUids = [];
   SelectedPlace? _selectedPlaceDetails;
   bool _isLoading = false;
+  EventCategory _selectedCategory = EventCategory.other;
 
   @override
   void initState() {
@@ -59,6 +63,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
     _isPrivate = widget.initialIsPrivate;
     _selectedFriendUids = List<String>.from(widget.initialSelectedFriendUids);
     _selectedPlaceDetails = widget.initialSelectedPlace;
+    _selectedCategory = widget.initialCategory ?? EventCategory.other;
   }
 
   @override
@@ -313,6 +318,38 @@ class _AddEventDialogState extends State<AddEventDialog> {
                   style: GoogleFonts.lato(fontStyle: FontStyle.italic, color: Colors.grey),
                 ),
               ),
+            const SizedBox(height: 16),
+            Text('Category', style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: EventCategory.values.map((category) {
+                final isSelected = category == _selectedCategory;
+                return ChoiceChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(category.icon, size: 16, color: isSelected ? Colors.white : category.color),
+                      const SizedBox(width: 4),
+                      Text(category.displayName, style: GoogleFonts.lato(
+                        color: isSelected ? Colors.white : Colors.black87,
+                      )),
+                    ],
+                  ),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedCategory = category;
+                      });
+                    }
+                  },
+                  backgroundColor: Colors.white,
+                  selectedColor: category.color,
+                  side: BorderSide(color: category.color),
+                );
+              }).toList(),
+            ),
           ],
         ),
       ),
@@ -374,6 +411,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
                 'sharedWith': _isPrivate ? [] : _selectedFriendUids,
                 'createdAt': FieldValue.serverTimestamp(),
                 'creatorId': currentUser.uid,
+                'category': _selectedCategory.name,
               };
 
               await FirebaseFirestore.instance
